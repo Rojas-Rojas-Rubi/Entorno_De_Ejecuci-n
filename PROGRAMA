@@ -1,0 +1,581 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include </usr/include/mysql/mysql.h>
+
+// --- gotoxy compatible con Linux (secuencias ANSI) ---
+void gotoxy(int x, int y) {
+    printf("\033[%d;%dH", y, x);
+}
+
+// --- Estructuras para las tablas de la base de datos ---
+typedef struct {
+    int id_terminal;     // Se utiliza ya que es un identificador numérico que se utiliza como clave primaria en la base de datos.
+    char nombre[50];
+} Terminal;
+
+typedef struct {
+    char DNI[20];          // Se usa char[] en DNI, nombre y telefono porque
+    char nombre[50];       // Son datos textuales o alfanuméricos y no se hacen operaciones matemáticas con ellos
+    char telefono[20];     // esto aplica tambien para las demas estructuras
+    int id_terminal;
+} Usuario;
+
+typedef struct {
+    char codigo_perfil[10];  
+    char descripcion[200];
+} Perfil;
+
+typedef struct {
+    char codigo_ventana[10];
+    char descripcion[200];
+} Ventana;
+
+typedef struct {
+    char codigo_sub[10];         
+    char descripcion[200];
+    char ventana_inicio[10];    
+} Subsistema;
+
+
+// --- Variable global para la conexión MySQL ---
+MYSQL *con;
+
+// --- Funciones de utilidad ---
+void finish_with_error() {
+    fprintf(stderr, "%s\n", mysql_error(con));      // Imprime en consola (stderr "error estándar") el mensaje de error generado por MySQL
+    if (con != NULL) {                              //Si la conexión está abierta, la cierra
+        mysql_close(con);
+    }
+    exit(1);
+}
+
+void conectar() { 
+    con = mysql_init(NULL);
+    if (con == NULL) {                                // Verifica si la inicialización falló
+        fprintf(stderr, "mysql_init() falló\n");      // Imprime un mensaje de error y termina el programa
+        exit(1);
+    }
+    
+    // Intenta conectar con la base de datos usando los parámetros dados:
+    // servidor "localhost", usuario "root", contraseña "Rubi@1004",
+    // base de datos "entorno", puerto 3306 y socket local en Linux
+
+    if (mysql_real_connect(con, "localhost", "root", "Rubi@1004", "entorno",
+    3306, "/var/run/mysqld/mysqld.sock", 0) == NULL) {
+        finish_with_error();                           // Si la conexión falla, llama a la función que maneja el error y termina
+    }
+}
+
+void crear_terminal(Terminal *t) {
+    char query[256]; //Crea un arreglo de caracteres para almacenar la consulta SQL.
+    snprintf(query, sizeof(query), "INSERT INTO terminales(nombre) VALUES('%s')", t->nombre);  //Forma la consulta INSERT INTO terminales(nombre) VALUES('nombre_del_terminal') usando el nombre que tiene t->nombre
+    if (mysql_query(con, query)) finish_with_error(); //Envía la consulta a la base de datos para que inserte el registro y si hay un error, llama a finish_with_error() para mostrar el error y salir.
+    printf("Terminal creada con éxito.\n");
+}
+
+
+void leer_terminales() {
+    MYSQL_RES *res; //guarda el resultado de la consulta
+    MYSQL_ROW row;  //funciona para iterar por cada fila del resultado
+
+    system("clear"); //Limpia la pantalla
+    gotoxy(0, 2);
+    printf("=== Terminales ===\n");
+
+    if (mysql_query(con, "SELECT id_terminal, nombre FROM terminales")) finish_with_error();  //Solicita el id_terminal y el nombre de todos los registros de la tabla terminales
+    res = mysql_store_result(con); //Guarda el resultado lo que pernite el acceso a las filas del recultado 
+
+    int y = 4;
+    while ((row = mysql_fetch_row(res))) {
+        gotoxy(2, y);
+        printf("ID: %-5s Nombre: %-30s", row[0], row[1]);
+        y += 2;
+    }
+    mysql_free_result(res);
+}
+
+void menu_terminales() {
+    int opcion;
+    Terminal t;
+    do {
+        system("clear || cls");
+        gotoxy(10, 2); printf("=== CRUD TERMINALES ===");
+        gotoxy(10, 4); printf("1. Crear Terminal");
+        gotoxy(10, 5); printf("2. Leer Terminales");
+        gotoxy(10, 6); printf("3. Modificar Terminal");
+        gotoxy(10, 7); printf("4. Eliminar Terminal");
+        gotoxy(10, 8); printf("0. Volver al menú principal");
+        gotoxy(10, 10); printf("Seleccione una opción: ");
+        scanf("%d", &opcion);
+
+        switch(opcion) {
+            case 1:
+                gotoxy(10, 12); printf("Nombre: ");
+                scanf(" %[^\n]", t.nombre);
+                crear_terminal(&t);
+                break;
+            case 2:
+                leer_terminales();
+                break;
+            case 3: {
+                int id;
+                gotoxy(10, 12); printf("ID de la terminal a modificar: ");
+                scanf("%d", &id);
+                gotoxy(10, 13); printf("Nuevo nombre: ");
+                scanf(" %[^\n]", t.nombre);
+                char query[256];
+                snprintf(query, sizeof(query), "UPDATE terminales SET nombre='%s' WHERE id_terminal=%d", t.nombre, id);
+                if (mysql_query(con, query)) finish_with_error();
+                printf("Terminal actualizada.\n");
+                break;
+            }
+            case 4: {
+                int id;
+                gotoxy(10, 12); printf("ID de la terminal a eliminar: ");
+                scanf("%d", &id);
+                char query[256];
+                snprintf(query, sizeof(query), "DELETE FROM terminales WHERE id_terminal=%d", id);
+                if (mysql_query(con, query)) finish_with_error();
+                printf("Terminal eliminada.\n");
+                break;
+            }
+        }
+        gotoxy(10, 14); printf("Presiona ENTER para continuar...");
+        getchar(); getchar(); // Espera input
+    } while(opcion != 0);
+}
+
+
+void leer_usuarios() {
+    MYSQL_RES *res;
+    MYSQL_ROW row;
+
+    system("clear");
+    gotoxy(0, 2);
+    printf("=== Usuarios ===\n");
+
+    const char *query = "SELECT u.DNI, u.nombre, u.telefono, t.nombre "
+                        "FROM usuarios u JOIN terminales t ON u.id_terminal = t.id_terminal"; //Realiza una consulta que permite mostrar la terminal como texto en lugar del id
+
+    if (mysql_query(con, query)) finish_with_error();
+    res = mysql_store_result(con);
+
+    int y = 4;
+    while ((row = mysql_fetch_row(res))) {
+        gotoxy(2, y);
+        printf("DNI: %-10s Nombre: %-20s Teléfono: %-15s Terminal: %-20s", row[0], row[1], row[2], row[3]);
+        y += 2;
+    }
+    mysql_free_result(res);
+}
+
+void menu_usuarios() {
+    int opcion;
+    Usuario u; // estructura usuario definida, similar a Terminal
+    do {
+        system("clear || cls");
+        gotoxy(10, 2); printf("=== CRUD USUARIOS ===");
+        gotoxy(10, 4); printf("1. Crear Usuario");
+        gotoxy(10, 5); printf("2. Leer Usuarios");
+        gotoxy(10, 6); printf("3. Modificar Usuario");
+        gotoxy(10, 7); printf("4. Eliminar Usuario");
+        gotoxy(10, 8); printf("0. Volver al menú principal");
+        gotoxy(10, 10); printf("Seleccione una opción: ");
+        scanf("%d", &opcion);
+        getchar(); // Limpia buffer después de scanf
+
+        switch(opcion) {
+            case 1:
+                gotoxy(10, 12); printf("DNI: ");
+                scanf(" %[^\n]", u.DNI);
+                gotoxy(10, 13); printf("Nombre: ");
+                scanf(" %[^\n]", u.nombre);
+                gotoxy(10, 14); printf("Teléfono: ");
+                scanf(" %[^\n]", u.telefono);
+                gotoxy(10, 15); printf("ID Terminal: ");
+                scanf("%d", &u.id_terminal);
+
+                // Consulta INSERT para guardar el usuario
+                {
+                    char query[512];
+                    snprintf(query, sizeof(query), 
+                        "INSERT INTO usuarios (DNI, nombre, telefono, id_terminal) VALUES ('%s', '%s', '%s', %d)",
+                        u.DNI, u.nombre, u.telefono, u.id_terminal);
+
+                    if (mysql_query(con, query)) finish_with_error();
+                    printf("Usuario creado.\n");
+                }
+                break;
+            case 2:
+                leer_usuarios();
+                break;
+            case 3: {
+                char dni[20];
+                gotoxy(10, 12); printf("DNI del usuario a modificar: ");
+                scanf(" %[^\n]", dni);
+
+                gotoxy(10, 13); printf("Nuevo nombre: ");
+                scanf(" %[^\n]", u.nombre);
+                gotoxy(10, 14); printf("Nuevo teléfono: ");
+                scanf(" %[^\n]", u.telefono);
+                gotoxy(10, 15); printf("Nuevo ID Terminal: ");
+                scanf("%d", &u.id_terminal);
+
+                char query[512];
+                snprintf(query, sizeof(query),
+                         "UPDATE usuarios SET nombre='%s', telefono='%s', id_terminal=%d WHERE DNI='%s'",
+                         u.nombre, u.telefono, u.id_terminal, dni);
+                if (mysql_query(con, query)) finish_with_error();
+                printf("Usuario actualizado.\n");
+                break;
+            }
+            case 4: {
+                char dni[20];
+                gotoxy(10, 12); printf("DNI del usuario a eliminar: ");
+                scanf(" %[^\n]", dni);
+
+                char query[256];
+                snprintf(query, sizeof(query), "DELETE FROM usuarios WHERE DNI='%s'", dni);
+                if (mysql_query(con, query)) finish_with_error();
+                printf("Usuario eliminado.\n");
+                break;
+            }
+        }
+        gotoxy(10, 16); printf("Presiona ENTER para continuar...");
+        getchar(); getchar(); // Espera input
+    } while(opcion != 0);
+}
+
+void leer_perfiles() {
+    MYSQL_RES *res;
+    MYSQL_ROW row;   //estructura similar a leer_Terminal
+
+    system("clear");
+    gotoxy(0, 2);
+    printf("=== Perfiles ===\n");
+
+    if (mysql_query(con, "SELECT codigo_perfil, descripcion FROM perfil")) finish_with_error();
+    res = mysql_store_result(con);
+
+    int y = 4;
+    while ((row = mysql_fetch_row(res))) {
+        gotoxy(2, y);
+        printf("Código: %-5s Descripción: %-50s", row[0], row[1]);
+        y += 2;
+    }
+    mysql_free_result(res);
+}
+
+void menu_perfiles() { // estructura perfiles definida, similar a Terminal
+    int opcion;
+    Perfil p;
+
+    do {
+        system("clear || cls");
+        gotoxy(10, 2); printf("=== CRUD PERFILES ===");
+        gotoxy(10, 4); printf("1. Crear Perfil");
+        gotoxy(10, 5); printf("2. Leer Perfiles");
+        gotoxy(10, 6); printf("3. Modificar Perfil");
+        gotoxy(10, 7); printf("4. Eliminar Perfil");
+        gotoxy(10, 8); printf("0. Volver al menú principal");
+        gotoxy(10, 10); printf("Seleccione una opción: ");
+        scanf("%d", &opcion);
+        getchar();  // Limpia buffer
+
+        switch(opcion) {
+            case 1:
+                gotoxy(10, 12); printf("Código de Perfil: ");
+                scanf(" %[^\n]", p.codigo_perfil);
+                gotoxy(10, 13); printf("Descripción: ");
+                scanf(" %[^\n]", p.descripcion);
+
+                {
+                    char query[512];
+                    snprintf(query, sizeof(query),
+                             "INSERT INTO perfil (codigo_perfil, descripcion) VALUES ('%s', '%s')",
+                             p.codigo_perfil, p.descripcion);
+
+                    if (mysql_query(con, query)) finish_with_error();
+                    printf("Perfil creado.\n");
+                }
+                break;
+
+            case 2:
+                leer_perfiles();
+                break;
+
+            case 3: {
+                char codigo[10];
+                gotoxy(10, 12); printf("Código del perfil a modificar: ");
+                scanf(" %[^\n]", codigo);
+                gotoxy(10, 13); printf("Nueva descripción: ");
+                scanf(" %[^\n]", p.descripcion);
+
+                char query[512];
+                snprintf(query, sizeof(query),
+                         "UPDATE perfil SET descripcion='%s' WHERE codigo_perfil='%s'",
+                         p.descripcion, codigo);
+
+                if (mysql_query(con, query)) finish_with_error();
+                printf("Perfil actualizado.\n");
+                break;
+            }
+
+            case 4: {
+                char codigo[10];
+                gotoxy(10, 12); printf("Código del perfil a eliminar: ");
+                scanf(" %[^\n]", codigo);
+
+                char query[256];
+                snprintf(query, sizeof(query),
+                         "DELETE FROM perfil WHERE codigo_perfil='%s'", codigo);
+
+                if (mysql_query(con, query)) finish_with_error();
+                printf("Perfil eliminado.\n");
+                break;
+            }
+        }
+        gotoxy(10, 15); printf("Presiona ENTER para continuar...");
+        getchar(); getchar(); // Espera input
+    } while(opcion != 0);
+}
+
+void leer_ventanas() {
+    MYSQL_RES *res;
+    MYSQL_ROW row;
+
+    system("clear");
+    gotoxy(0, 2);
+    printf("=== Ventanas ===\n");
+
+    if (mysql_query(con, "SELECT codigo_ventana, descripcion FROM ventana")) finish_with_error();
+    res = mysql_store_result(con);
+
+    int y = 4;
+    while ((row = mysql_fetch_row(res))) {
+        gotoxy(2, y);
+        printf("Código: %-5s Descripción: %-50s", row[0], row[1]);
+        y += 2;
+    }
+    mysql_free_result(res);
+}
+
+void menu_ventanas() { // estructura ventanas definida, similar a Terminal
+    int opcion;
+    Ventana v;
+
+    do {
+        system("clear || cls");
+        gotoxy(10, 2); printf("=== CRUD VENTANAS ===");
+        gotoxy(10, 4); printf("1. Crear Ventana");
+        gotoxy(10, 5); printf("2. Leer Ventanas");
+        gotoxy(10, 6); printf("3. Modificar Ventana");
+        gotoxy(10, 7); printf("4. Eliminar Ventana");
+        gotoxy(10, 8); printf("0. Volver al menú principal");
+        gotoxy(10, 10); printf("Seleccione una opción: ");
+        scanf("%d", &opcion);
+        getchar();  // limpiar buffer
+
+        switch(opcion) {
+            case 1:
+                gotoxy(10, 12); printf("Código de Ventana: ");
+                scanf(" %[^\n]", v.codigo_ventana);
+                gotoxy(10, 13); printf("Descripción: ");
+                scanf(" %[^\n]", v.descripcion);
+
+                {
+                    char query[512];
+                    snprintf(query, sizeof(query),
+                             "INSERT INTO ventana (codigo_ventana, descripcion) VALUES ('%s', '%s')",
+                             v.codigo_ventana, v.descripcion);
+
+                    if (mysql_query(con, query)) finish_with_error();
+                    printf("Ventana creada.\n");
+                }
+                break;
+
+            case 2:
+                leer_ventanas();
+                break;
+
+            case 3: {
+                char codigo[10];
+                gotoxy(10, 12); printf("Código de ventana a modificar: ");
+                scanf(" %[^\n]", codigo);
+                gotoxy(10, 13); printf("Nueva descripción: ");
+                scanf(" %[^\n]", v.descripcion);
+
+                char query[512];
+                snprintf(query, sizeof(query),
+                         "UPDATE ventana SET descripcion='%s' WHERE codigo_ventana='%s'",
+                         v.descripcion, codigo);
+
+                if (mysql_query(con, query)) finish_with_error();
+                printf("Ventana actualizada.\n");
+                break;
+            }
+
+            case 4: {
+                char codigo[10];
+                gotoxy(10, 12); printf("Código de ventana a eliminar: ");
+                scanf(" %[^\n]", codigo);
+
+                char query[256];
+                snprintf(query, sizeof(query),
+                         "DELETE FROM ventana WHERE codigo_ventana='%s'", codigo);
+
+                if (mysql_query(con, query)) finish_with_error();
+                printf("Ventana eliminada.\n");
+                break;
+            }
+        }
+        gotoxy(10, 15); printf("Presiona ENTER para continuar...");
+        getchar(); getchar(); // Espera input
+    } while(opcion != 0);
+}
+
+void leer_subsistemas() { 
+    MYSQL_RES *res;
+    MYSQL_ROW row;
+
+    system("clear");
+    gotoxy(0, 2);
+    printf("=== Subsistemas ===\n");
+
+    const char *query = "SELECT s.codigo_sub, s.descripcion, v.descripcion "
+                        "FROM subsistema s JOIN ventana v ON s.ventana_inicio = v.codigo_ventana";
+
+    if (mysql_query(con, query)) finish_with_error();
+    res = mysql_store_result(con);
+
+    int y = 4;
+    while ((row = mysql_fetch_row(res))) {
+        gotoxy(2, y);
+        printf("Código: %-5s Descripción: %-50s Ventana Inicio: %-30s", row[0], row[1], row[2]);
+        y += 2;
+    }
+    mysql_free_result(res);
+}
+
+void menu_subsistemas() { // estructura subsistemas definida, similar a Terminal
+    int opcion;
+    Subsistema s;
+
+    do {
+        system("clear || cls");
+        gotoxy(10, 2); printf("=== CRUD SUBSISTEMAS ===");
+        gotoxy(10, 4); printf("1. Crear Subsistema");
+        gotoxy(10, 5); printf("2. Leer Subsistemas");
+        gotoxy(10, 6); printf("3. Modificar Subsistema");
+        gotoxy(10, 7); printf("4. Eliminar Subsistema");
+        gotoxy(10, 8); printf("0. Volver al menú principal");
+        gotoxy(10, 10); printf("Seleccione una opción: ");
+        scanf("%d", &opcion);
+        getchar();  // Limpiar buffer
+
+        switch(opcion) {
+            case 1:
+                gotoxy(10, 12); printf("Código Subsistema: ");
+                scanf(" %[^\n]", s.codigo_sub);
+                gotoxy(10, 13); printf("Descripción: ");
+                scanf(" %[^\n]", s.descripcion);
+                gotoxy(10, 14); printf("Código Ventana Inicio: ");
+                scanf(" %[^\n]", s.ventana_inicio);
+
+                {
+                    char query[512];
+                    snprintf(query, sizeof(query),
+                        "INSERT INTO subsistema (codigo_sub, descripcion, ventana_inicio) VALUES ('%s', '%s', '%s')",
+                        s.codigo_sub, s.descripcion, s.ventana_inicio);
+
+                    if (mysql_query(con, query)) finish_with_error();
+                    printf("Subsistema creado.\n");
+                }
+                break;
+
+            case 2:
+                leer_subsistemas();
+                break;
+
+            case 3: {
+                char codigo[10];
+                gotoxy(10, 12); printf("Código subsistema a modificar: ");
+                scanf(" %[^\n]", codigo);
+                gotoxy(10, 13); printf("Nueva descripción: ");
+                scanf(" %[^\n]", s.descripcion);
+                gotoxy(10, 14); printf("Nuevo código ventana inicio: ");
+                scanf(" %[^\n]", s.ventana_inicio);
+
+                char query[512];
+                snprintf(query, sizeof(query),
+                    "UPDATE subsistema SET descripcion='%s', ventana_inicio='%s' WHERE codigo_sub='%s'",
+                    s.descripcion, s.ventana_inicio, codigo);
+
+                if (mysql_query(con, query)) finish_with_error();
+                printf("Subsistema actualizado.\n");
+                break;
+            }
+
+            case 4: {
+                char codigo[10];
+                gotoxy(10, 12); printf("Código subsistema a eliminar: ");
+                scanf(" %[^\n]", codigo);
+
+                char query[256];
+                snprintf(query, sizeof(query),
+                    "DELETE FROM subsistema WHERE codigo_sub='%s'", codigo);
+
+                if (mysql_query(con, query)) finish_with_error();
+                printf("Subsistema eliminado.\n");
+                break;
+            }
+        }
+        gotoxy(10, 16); printf("Presiona ENTER para continuar...");
+        getchar(); getchar(); // Espera input
+    } while(opcion != 0);
+}
+
+// --- Función principal ---
+int main() {
+    conectar();
+
+    int opcion;
+    do {
+        system("clear");
+        gotoxy(5, 2); printf("===== MENÚ PRINCIPAL =====");
+        gotoxy(5, 4); printf("1. CRUD Terminales");
+        gotoxy(5, 5); printf("2. CRUD Usuarios");
+        gotoxy(5, 6); printf("3. CRUD Perfiles");
+        gotoxy(5, 7); printf("4. CRUD Ventanas");
+        gotoxy(5, 8); printf("5. CRUD Subsistemas");
+        gotoxy(5, 9); printf("0. Salir");
+        gotoxy(5, 11); printf("Opción: ");
+        scanf("%d", &opcion);
+
+        switch(opcion) {
+            case 1: menu_terminales(); break;
+            case 2: menu_usuarios(); break;
+            case 3: menu_perfiles(); break;
+            case 4: menu_ventanas(); break;
+            case 5: menu_subsistemas(); break;
+            case 0: break;
+            default:
+                gotoxy(5, 13);
+                printf("Opción inválida. Presiona Enter para continuar.");
+                getchar(); getchar();
+        }
+
+        if (opcion != 0) {
+            gotoxy(5, 45);
+            printf("Presiona dos veces Enter para volver al menú..."); 
+            getchar(); getchar();
+        }
+
+    } while (opcion != 0);
+
+    mysql_close(con);
+    gotoxy(0, 50);
+    printf("\nConexión cerrada.\n");
+    return 0;
+}
