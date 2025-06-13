@@ -1,3 +1,10 @@
+/* gcc entorno.c -o entorno -lmysqlclient
+
+./entorno
+
+Rubi@1004
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
