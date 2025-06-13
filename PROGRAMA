@@ -141,7 +141,7 @@ void menu_terminales() {
                 break;
             }
         }
-        gotoxy(10, 14); printf("Presiona ENTER para continuar...");
+        gotoxy(42, 42); printf("Presiona ENTER para continuar...");
         getchar(); getchar(); // Espera input
     } while(opcion != 0);
 }
@@ -242,7 +242,7 @@ void menu_usuarios() {
                 break;
             }
         }
-        gotoxy(10, 16); printf("Presiona ENTER para continuar...");
+        gotoxy(42, 42); printf("Presiona ENTER para continuar...");
         getchar(); getchar(); // Espera input
     } while(opcion != 0);
 }
@@ -336,7 +336,7 @@ void menu_perfiles() { // estructura perfiles definida, similar a Terminal
                 break;
             }
         }
-        gotoxy(10, 15); printf("Presiona ENTER para continuar...");
+        gotoxy(42, 45); printf("Presiona ENTER para continuar...");
         getchar(); getchar(); // Espera input
     } while(opcion != 0);
 }
@@ -430,7 +430,7 @@ void menu_ventanas() { // estructura ventanas definida, similar a Terminal
                 break;
             }
         }
-        gotoxy(10, 15); printf("Presiona ENTER para continuar...");
+        gotoxy(42, 45); printf("Presiona ENTER para continuar...");
         getchar(); getchar(); // Espera input
     } while(opcion != 0);
 }
@@ -531,7 +531,7 @@ void menu_subsistemas() { // estructura subsistemas definida, similar a Terminal
                 break;
             }
         }
-        gotoxy(10, 16); printf("Presiona ENTER para continuar...");
+        gotoxy(42, 46); printf("Presiona ENTER para continuar...");
         getchar(); getchar(); // Espera input
     } while(opcion != 0);
 }
