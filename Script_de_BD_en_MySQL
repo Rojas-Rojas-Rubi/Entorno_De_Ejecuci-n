@@ -1,0 +1,115 @@
+CREATE DATABASE entorno;
+USE entorno;
+
+-- 1. Terminales 
+CREATE TABLE terminales (
+    id_terminal INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(50)
+);
+
+-- 2. Usuarios
+CREATE TABLE usuarios (
+    DNI INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(50),
+    telefono VARCHAR(20),
+    id_terminal INT, 
+    FOREIGN KEY (id_terminal) REFERENCES terminales(id_terminal)
+);
+
+-- 3. Perfiles
+CREATE TABLE perfil (
+    codigo_perfil INT AUTO_INCREMENT PRIMARY KEY,
+    descripcion TEXT
+);
+
+-- 4. Ventanas
+CREATE TABLE ventana (
+    codigo_ventana INT AUTO_INCREMENT PRIMARY KEY,
+    descripcion TEXT
+);
+
+-- 5. Subsistema 
+CREATE TABLE subsistema (
+    codigo_sub INT AUTO_INCREMENT PRIMARY KEY,
+    descripcion TEXT,
+    ventana_inicio INT,
+    FOREIGN KEY (ventana_inicio) REFERENCES ventana(codigo_ventana)
+);
+
+-- 6. Controles
+CREATE TABLE control (
+    codigo_control INT AUTO_INCREMENT PRIMARY KEY,
+    descripcion TEXT,
+    tipo_control ENUM('boton', 'item_menu'),
+    icono VARCHAR(50),
+    texto VARCHAR(50),
+    codigo_padre INT,
+    FOREIGN KEY (codigo_padre) REFERENCES control(codigo_control)
+);
+
+-- 7. Acciones
+CREATE TABLE accion (
+    codigo_accion INT AUTO_INCREMENT PRIMARY KEY,
+    descripcion TEXT,
+    tipo_accion ENUM('funcion', 'llamada')
+);
+
+-- 8. Herencia de acciones: función
+CREATE TABLE funcion (
+    codigo_accion INT PRIMARY KEY,
+    nombre_funcion VARCHAR(100),
+    FOREIGN KEY (codigo_accion) REFERENCES accion(codigo_accion)
+);
+
+-- 9. Llamada a ventana
+CREATE TABLE llamada (
+    codigo_accion INT PRIMARY KEY,
+    codigo_ventana INT,
+    FOREIGN KEY (codigo_accion) REFERENCES accion(codigo_accion),
+    FOREIGN KEY (codigo_ventana) REFERENCES ventana(codigo_ventana)
+);
+
+-- 10. Relación usuario-perfil
+CREATE TABLE usuario_perfil (
+    DNI INT,
+    codigo_perfil INT,
+    PRIMARY KEY (DNI, codigo_perfil),
+    FOREIGN KEY (DNI) REFERENCES usuarios(DNI),
+    FOREIGN KEY (codigo_perfil) REFERENCES perfil(codigo_perfil)
+);
+
+-- 11. Relación perfil-subsistema
+CREATE TABLE perfil_sistemas(
+    codigo_perfil INT,
+    codigo_sub INT,
+    PRIMARY KEY (codigo_perfil, codigo_sub),
+    FOREIGN KEY (codigo_perfil) REFERENCES perfil(codigo_perfil),
+    FOREIGN KEY (codigo_sub) REFERENCES subsistema(codigo_sub)
+);
+
+-- 12. Relación subsistema-ventana
+CREATE TABLE sub_ventana (
+    codigo_sub INT,
+    codigo_ventana INT,
+    PRIMARY KEY (codigo_sub, codigo_ventana),
+    FOREIGN KEY (codigo_sub) REFERENCES subsistema(codigo_sub),
+    FOREIGN KEY (codigo_ventana) REFERENCES ventana(codigo_ventana)
+);
+
+-- 13. Relación ventana-control (1:N)
+CREATE TABLE ventana_control (
+    codigo_ventana INT,
+    codigo_control INT,
+    PRIMARY KEY (codigo_ventana, codigo_control),
+    FOREIGN KEY (codigo_ventana) REFERENCES ventana(codigo_ventana),
+    FOREIGN KEY (codigo_control) REFERENCES control(codigo_control)
+);
+
+-- 14. Relación control-acción (1:1)
+CREATE TABLE control_accion (
+    codigo_control INT,
+    codigo_accion INT,
+    PRIMARY KEY (codigo_control, codigo_accion),
+    FOREIGN KEY (codigo_control) REFERENCES control(codigo_control),
+    FOREIGN KEY (codigo_accion) REFERENCES accion(codigo_accion)
+);
